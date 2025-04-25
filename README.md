@@ -43,6 +43,7 @@ library('ruleSHAP')
 
 #simulate the data
 data=gendata.friedman1(n=100,p=10)
+X_data=data[,1:10]
 
 #define the formula
 formula=y~.
@@ -51,7 +52,7 @@ formula=y~.
 fitted_model=ruleSHAP(formula,data)
 
 #Compute Shapley values
-shapley_dfs=compute_SHAP(RS_fit,data[1:3e3,1:p],interactions=T)
+shapley_dfs=compute_SHAP(fitted_model,X_data,interactions=T)
 marginal_shapley=shapley_dfs$marginal
 interaction_shapley=shapley_dfs$interactions
 ```
