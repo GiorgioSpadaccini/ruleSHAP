@@ -42,7 +42,7 @@ install.packages('ruleSHAP')
 library('ruleSHAP')
 
 #simulate the data
-data=gendata.friedman1(n=100,p=5)
+data=gendata.friedman1(n=100,p=10)
 
 #define the formula
 formula=y~.
