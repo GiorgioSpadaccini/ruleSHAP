@@ -443,7 +443,7 @@ hs=function(y, X, family=c('gaussian',"binomial"), p.lin=ncol(X),
 
     #Update tau
     if (method.tau == "halfCauchy") {
-      xi.inv = 1/rexp(1, 1 + 1/tau^2)
+      xi.inv = rexp(1, 1 + 1/tau^2)
       tau = sqrt(1/rgamma(1, shape = (p + 1)/2,
                           rate = xi.inv + sum(Beta^2/(2 * (lambda*prior_lambda*c(rep(tau.lin,p.lin),rep(tau.rules,p-p.lin)))^2 * Sigma2))))
     }
