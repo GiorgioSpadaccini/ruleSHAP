@@ -26,8 +26,8 @@ This GitHub repository contains the codes run to perform the analyses described 
     - _recombine_and_plot.R_: File that needs to be run last, to recombine the output of each batch and plot the results.
 - **RuleSHAP**: folder containing the R package to fit a ruleSHAP model. The package may be installed by using the following snippet of code:
   ```
-  install.packages('devtools')
-  devtools::install_github('GiorgioSpadaccini/ruleSHAP/ruleSHAP')
+  install.packages('remotes')
+  remotes::install_github('GiorgioSpadaccini/ruleSHAP/ruleSHAP')
   ```
 
 
@@ -38,8 +38,8 @@ Here is a quick example of how one may use the ruleSHAP package:
 
 ```
 #install and load the package
-install.packages('ruleSHAP')
-library('ruleSHAP')
+remotes::install_github('GiorgioSpadaccini/ruleSHAP/ruleSHAP')
+library(ruleSHAP)
 
 #simulate the data
 data=gendata.friedman1(n=30,p=10)
