@@ -146,11 +146,8 @@ ruleSHAP=function(formula,data,intercept=T,family=c('gaussian','binomial'),
   }
 
 
-  #Fit parametric random forest on residuals if rules not pre-specified
-  if(is.null(rules)){
-    #Use the linear terms to compute residuals
-    if(verbose){print('Generating rules')}
-    HS_fit=hs(y=y, X=X_lin,family=family,
+  #Use the linear terms to compute residuals
+  HS_fit=hs(y=y, X=X_lin,family=family,
               method.tau.lin=method.tau.lin, tau.lin=1,
               method.tau.rules = 'fixed', tau.rules = 1,
               method.tau = 'fixed', tau = 1,
@@ -169,8 +166,10 @@ ruleSHAP=function(formula,data,intercept=T,family=c('gaussian','binomial'),
       rulegen_data$res=(y-phat)/(phat*(1-phat))
     }
 
-
-    rules=PRF(x=rulegen_data[,X_names],y=rulegen_data$res,
+  #Fit parametric random forest on residuals if rules not pre-specified
+  if(is.null(rules)){
+  if(verbose){print('Generating rules')}
+   rules=PRF(x=rulegen_data[,X_names],y=rulegen_data$res,
               ntree=ntree,rounding.digits=rounding.digits,
               maxdepth=maxdepth,disaggregate=disaggregate)
 
@@ -548,3 +547,4 @@ hs=function(y, X, family=c('gaussian',"binomial"), p.lin=ncol(X),
                 Sigma2Hat = mean(sigma2out))
   return(result)
 }
+
