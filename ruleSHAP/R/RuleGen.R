@@ -101,28 +101,40 @@ RuleMats=function(rules,x_df){
 #' @param rounding.digits Number of decimals that the splitting points
 #' are rounded to in the rule generation. This rounding simplifies readability
 #' of rules and prevents rules from being very similar but not identical.
-#'
+#' @param type Assumption underlying generation of synthetic copies of the outcome.
+#' Possible values \code{"normal"} (generates errors from a normal distribution with 
+#' $\sigma =$ random forest's OOB MSE) or \code{"empirical"} (errors are reshuffled 
+#' OOB errors). 
 #' @return A character vector containing all the rules that were generated. The rules
 #' are not filtered for duplicates. To filter rules, check the function \code{filter_rules}.
 #'
 #' @export
 PRF=function(x_df, y, ntree=500, maxdepth = 3, rounding.digits=3,
-             disaggregate=T){
+             disaggregate=TRUE, type = "normal"){
 
-  #Fit initial forest to determine sigma^2
+  #Fit initial forest to obtain OOB predictions (mu) and errors
   first_fit=randomForest(x=x_df, y=y)
-
-  MSE=mean((y-predict(first_fit))^2) #OOB MSE
-  mu=predict(first_fit)
+  mu <- predict(first_fit)
+  if (type == "normal"){
+    MSE=mean((y-mu)^2) # OOB MSE
+  } else if (type == "empirical"){
+    errors=y-mu
+  }
 
   #Fit small forests to get rules from
   n=nrow(x_df)
   rules=NULL
   for(i in 1:ntree){
     #Define bootstrap subsample to fit the forest on
-    indices=sample(1:n,n,replace=T)
+    indices=sample(1:n,n,replace=TRUE)
     X=x_df[indices,]
-    Y=mu[indices]+rnorm(n,sd=sqrt(MSE))
+    Y=mu[indices] + if (type == "normal") {
+      rnorm(n, sd=sqrt(MSE))
+    } else if (type == "empirical") {
+      errors[sample(1:n)] ## samples errors from full sample
+      ## alternatively, to sample errors from current bootstrap sample only:
+      ## errors[indices][sample(1:n)]
+    }
 
     inner_fit=randomForest::randomForest(X, y=Y, ntree=1, maxnodes=2^maxdepth,
                            replace=F,sampsize = n,nodesize=max(10,floor(0.025*n)))
@@ -485,3 +497,4 @@ XGB2unified=function(model,data,rounding.digits=3){
 
   return(unified)
 }
+
