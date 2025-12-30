@@ -38,7 +38,7 @@ friedman_test=gendata.friedman1(n=1e4,p=p,sd=10,rho=0.3+diag(0.7,nrow=p,ncol=p))
 #Preallocate data frame with predicted outcomes
 preds <- data.frame(pre = rep(NA, times = nrow(friedman_test)),
                     true = friedman_test[ , all.vars(formula)[1L]])
-preds$tree=preds$lasso=preds$ols=preds$rf=preds$hr1=preds$hr2=preds$ruleshap=preds$pre
+preds$lasso=preds$ols=preds$rf=preds$hr1=preds$hr2=preds$ruleshap=preds$pre
 
 
 #Preallocate matrix to store results in
@@ -61,12 +61,12 @@ for(i in 1:nrep){
     #Verbose
     print(paste('Fitting on sample size n =',n))
     
-    #Fit OLS,LASSO, PRE, RF and CTree
+    #Fit OLS,LASSO, PRE, RF
     ols <- lm(formula=formula, data=data)
     prel <- cv.glmnet(x=as.matrix(data[,1:p]),y=data$y)
     preb <- pre(formula, data = data)
     rf <- randomForest(formula, data = data)
-    tree <- ctree(formula, data = data)
+    
     
     #Fit HorseRule in two ways
     #I'll just assume intercept is included in the formula given in the input
@@ -91,8 +91,7 @@ for(i in 1:nrep){
     preds$ols <- predict(ols, newdata = friedman_test)
     preds$pre <- predict(preb, newdata = friedman_test)
     preds$lasso <- predict(prel, newx = as.matrix(friedman_test[,1:p]))
-    preds$rf <- predict(rf, newdata = friedman_test)  
-    preds$tree <- predict(tree, newdata = friedman_test)
+    preds$rf <- predict(rf, newdata = friedman_test)
     preds$hr1 <- hr1$pred
     preds$hr2 <- hr2$pred
     
@@ -182,7 +181,7 @@ saveRDS(rf_shapleys,'output/rf_shapleys_p30.Rda')
 #Create dataframe
 nmethods=6
 p_show=6
-models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF','cTree')
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF')
 df=data.frame(coef=c(readRDS('output/RuleFitMat_p30.Rda')[1:p_show,],
                      readRDS('output/RuleSHAPMat_p30.Rda')[1:p_show,],
                      readRDS('output/HorseRule1Mat_p30.Rda')[1:p_show,],
@@ -225,13 +224,13 @@ ggplot(df, aes(x=predictor, y=coef, fill=factor(model,levels=models))) +
 #Plot predictive performance
 #Load dataframes and join them
 nmethods=8
-models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF','cTree')
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF')
 df=rbind(data.frame(MSE=c(readRDS('output/MSEMat_p10.Rda')),p=10,
-                    model=c('RuleFit','RuleSHAP','HR2','HR1','RF','OLS','LASSO','cTree'),
+                    model=c('RuleFit','RuleSHAP','HR2','HR1','RF','OLS','LASSO'),
                     rep=rep(1:nrep,each=nmethods),
                     n=rep(n_vec,each=nrep*nmethods)),
          data.frame(MSE=c(readRDS('output/MSEMat_p30.Rda')),p=30,
-                    model=c('RuleFit','RuleSHAP','HR2','HR1','RF','OLS','LASSO','cTree'),
+                    model=c('RuleFit','RuleSHAP','HR2','HR1','RF','OLS','LASSO'),
                     rep=rep(1:nrep,each=nmethods),
                     n=rep(n_vec,each=nrep*nmethods)))
 #Plot it
@@ -265,7 +264,7 @@ RS_dfs=readRDS('output/shapleys_dfs_p30.Rda')
 rf_dfs=readRDS('output/rf_shapleys_p30.Rda')
 hr1_dfs=readRDS('output/hr1_shapleys_p30.Rda')
 hr2_dfs=readRDS('output/hr2_shapleys_p30.Rda')
-models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF','cTree')
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF')
 
 #Re-scale distances by theoretical variance of contribution
 x1x2_avg=rmutil::int2(function(x,z){sin(x*z*pi)},a=c(0,0),b=c(1,1))
