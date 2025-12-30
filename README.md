@@ -19,7 +19,7 @@ This GitHub repository contains the codes run to perform the analyses described 
   - _Performance_p30_gaussian.R_: Code to perform the (comparative) experiments on smaller sample sizes (n=100,300,500,1000,5000), for continuous outcome and for p=30 features. Includes codes to plot results
   - _Performance_p10_logistic.R_: Code to perform the (comparative) experiments on smaller sample sizes (n=100,300,500,1000,5000), for binarized outcome and for p=10 features. Includes codes to plot results
   - _Performance_p30_logistic.R_: Code to perform the (comparative) experiments on smaller sample sizes (n=100,300,500,1000,5000), for binarized outcome and for p=30 features. Includes codes to plot results
-  - _TypeI_error.R_: Code to estimate the type I error rate of the different methods discussed in the main text of the paper.
+  - _rejection_rates.R_: Code to estimate the local rejection rates of the different methods discussed in the main text of the paper.
   - _Supplementary_simulations.R_: Code to perform the simulations discussed in the supplementary material but not in the main text of the paper.
   - **Fragmented_simulation**: folder containing an example of how the code may be divided into small batches when the experiment involves many replicates. Covers the example of splitting the runs in the file _TypeI_error.R_
     - _run_experiments_block1.R_: Example of one of the files that need to be created to split the replicates into smaller batches. One file corresponds to one batch.
