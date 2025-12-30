@@ -88,27 +88,6 @@ for(i in 1:nrep){
     RS_fit=ruleSHAP(formula=formula, data=data,family='gaussian',verbose=T,burn.in = burn.in,nmc = nmc)
     ruleshap_dfs[[(p_index-1)*nrep+i]]=ruleshap_df=compute_SHAP(RS_fit,data[,1:p])$marginal
     
-    
-    
-    #### Print counts as a preview
-    bart_df$sig=sign(bart_df$CIinf*bart_df$CIsup)==1
-    ruleshap_df$sig=sign(ruleshap_df$CIinf*ruleshap_df$CIsup)==1
-    hr1_df$sig=sign(hr1_df$CIinf*hr1_df$CIsup)==1
-    hr2_df$sig=sign(hr2_df$CIinf*hr2_df$CIsup)==1
-    
-    bart_counts=bart_df %>% group_by(predictor) %>% summarize(npoints=sum(sig))
-    ruleshap_counts=ruleshap_df %>% group_by(predictor) %>% summarize(npoints=sum(sig))
-    hr1_counts=hr1_df %>% group_by(predictor) %>% summarize(npoints=sum(sig))
-    hr2_counts=hr2_df %>% group_by(predictor) %>% summarize(npoints=sum(sig))
-    
-    print('BART')
-    print(head(bart_counts[order(bart_counts$npoints,decreasing = T),],15))
-    print('HR1')
-    print(head(hr1_counts[order(hr1_counts$npoints,decreasing = T),],15))
-    print('HR2')
-    print(head(hr2_counts[order(hr2_counts$npoints,decreasing = T),],15))
-    print('ruleSHAP')
-    print(head(ruleshap_counts[order(ruleshap_counts$npoints,decreasing = T),],15))
   }
 }
 
@@ -120,12 +99,24 @@ for(i in 1:nrep){
 
 #Show results
 
-SigCounts=NoiseCounts=matrix(0,ncol=3,nrow=4)
-rownames(SigCounts)=rownames(NoiseCounts)=c('BART','HR1','HR2','RuleSHAP')
+SigCounts=list(matrix(0,ncol=100,nrow=4),
+               matrix(0,ncol=100,nrow=4),
+               matrix(0,ncol=100,nrow=4))
+NoiseCounts=list(matrix(0,ncol=100,nrow=4),
+               matrix(0,ncol=100,nrow=4),
+               matrix(0,ncol=100,nrow=4))
+rownames(SigCounts[[1]])=rownames(SigCounts[[2]])=
+  rownames(SigCounts[[3]])=rownames(NoiseCounts[[1]])=
+  rownames(NoiseCounts[[2]])=rownames(NoiseCounts[[3]])=
+  c('BART','HR1','HR2','RuleSHAP')
+
+names(SigCounts)=names(NoiseCounts)=paste0('p=',c(10,30,50))
+
 p_vec=rep(p_vec,each=nrep)
 
 for(i in 1:length(p_vec)){
-  p=p_vec[i]
+  
+  p_index=p_vec[i]
   
   bart_df=bart_dfs[[i]]
   ruleshap_df=ruleshap_dfs[[i]]
@@ -149,39 +140,81 @@ for(i in 1:length(p_vec)){
   hr1_counts$signal=hr1_counts$predictor %in% paste0('x.',1:5)
   hr2_counts$signal=hr2_counts$predictor %in% paste0('x.',1:5)
   
-  bart_counts=bart_counts %>% group_by(signal) %>% summarize(nvars=sum(npoints>0))
-  ruleshap_counts=ruleshap_counts %>% group_by(signal) %>% summarize(nvars=sum(npoints>0))
-  hr1_counts=hr1_counts %>% group_by(signal) %>% summarize(nvars=sum(npoints>0))
-  hr2_counts=hr2_counts %>% group_by(signal) %>% summarize(nvars=sum(npoints>0))
+  bart_fin=bart_counts %>% group_by(signal) %>% summarize(nvars=sum(npoints>0))
+  ruleshap_fin=ruleshap_counts %>% group_by(signal) %>% summarize(nvars=sum(npoints>0))
+  hr1_fin=hr1_counts %>% group_by(signal) %>% summarize(nvars=sum(npoints>0))
+  hr2_fin=hr2_counts %>% group_by(signal) %>% summarize(nvars=sum(npoints>0))
   
-  SigCounts[,ceiling(i/100)]=SigCounts[,ceiling(i/100)]+c(bart_counts$nvars[bart_counts$signal],
-                                                          hr1_counts$nvars[hr1_counts$signal],
-                                                          hr2_counts$nvars[hr2_counts$signal],
-                                                          ruleshap_counts$nvars[ruleshap_counts$signal])
-  NoiseCounts[,ceiling(i/100)]=NoiseCounts[,ceiling(i/100)]+c(bart_counts$nvars[!bart_counts$signal],
-                                                              hr1_counts$nvars[!hr1_counts$signal],
-                                                              hr2_counts$nvars[!hr2_counts$signal],
-                                                              ruleshap_counts$nvars[!ruleshap_counts$signal])
+  SigCounts[[p_index]][1,i%%100+1]=SigCounts[[p_index]][1,i%%100+1]+
+    sum(bart_counts$npoints*bart_counts$signal)
+  SigCounts[[p_index]][2,i%%100+1]=SigCounts[[p_index]][2,i%%100+1]+
+    sum(hr1_counts$npoints*hr1_counts$signal)
+  SigCounts[[p_index]][3,i%%100+1]=SigCounts[[p_index]][3,i%%100+1]+
+    sum(hr2_counts$npoints*hr2_counts$signal)
+  SigCounts[[p_index]][4,i%%100+1]=SigCounts[[p_index]][4,i%%100+1]+
+    sum(ruleshap_counts$npoints*ruleshap_counts$signal)
+  
+  
+  NoiseCounts[[p_index]][1,i%%100+1]=NoiseCounts[[p_index]][1,i%%100+1]+
+    sum(bart_counts$npoints*!bart_counts$signal)
+  NoiseCounts[[p_index]][2,i%%100+1]=NoiseCounts[[p_index]][2,i%%100+1]+
+    sum(hr1_counts$npoints*!hr1_counts$signal)
+  NoiseCounts[[p_index]][3,i%%100+1]=NoiseCounts[[p_index]][3,i%%100+1]+
+    sum(hr2_counts$npoints*!hr2_counts$signal)
+  NoiseCounts[[p_index]][4,i%%100+1]=NoiseCounts[[p_index]][4,i%%100+1]+
+    sum(ruleshap_counts$npoints*!ruleshap_counts$signal)
 }
 
-#Power:
-SigCounts/(5*nrep)
-#Type I error:
-NoiseCounts/rep(100*c(5,25,45),each=4)
-#FDR:
-NoiseCounts/(SigCounts+NoiseCounts)
+
+#Ridgeline density plots for local rejection rates
+library(ggplot2)
+library(ggridges)
+lines_df=data.frame(npoints=c(t(NoiseCounts[[1]])/5000,
+                              t(NoiseCounts[[2]])/25000,
+                              t(NoiseCounts[[3]])/45000,
+                              t(SigCounts[[1]])/5000,
+                              t(SigCounts[[2]])/5000,
+                              t(SigCounts[[3]])/5000),
+                    p=rep(c(10,30,50),each=100*4),
+                    model=rep(c('BART','HR1','HR2','RuleSHAP'),each=100),
+                    order=rep(c(4,1,2,3),each=100),
+                    signal=rep(c('Noise','Signal'),each=100*3*4))
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF','cTree')
+
+ggplot(lines_df, aes(x = npoints,
+                     fill = factor(model,levels=models),
+                     color = factor(model,levels=models),
+                     y=factor(model,levels=models[c(7,5,6,3)]))) +
+  geom_density_ridges(alpha=0.45,
+                      scale=2,rel_min_height=1e-2) +
+  facet_grid(paste0('p=',p)~signal,scales='free')+
+  theme_bw()+
+  theme(strip.text.x = element_text(size = 10))+
+  xlim(c(0,NA))+
+  labs(x = "Fraction of observations with significant feature effect",
+       y = "Frequency across replicates (density)")+
+  scale_fill_manual(values=c(colorspace::rainbow_hcl(length(models))),
+                    breaks=models,name='Model')+
+  scale_color_manual(values=c(colorspace::rainbow_hcl(length(models))),
+                     breaks=models,name='Model')+
+  theme(legend.position = "top", 
+        legend.box = "horizontal",
+        legend.direction = "horizontal")
 
 
 
 
 
-
-#Example of BART vs. ruleSHAP
+#Example of BART vs. HorseRule vs. ruleSHAP
 library(ggplot2)
 shapleys_df=rbind(cbind(bart_dfs[[13]],
                         model='BART'),
                   cbind(ruleshap_dfs[[13]],
-                        model='RuleSHAP'))
+                        model='RuleSHAP'),
+                  cbind(hr1_dfs[[13]],
+                        model='HorseRule (HR1)'),
+                  cbind(hr2_dfs[[13]],
+                        model='HorseRule (HR2)'))
 shapleys_df$sig=sign(shapleys_df$CIinf*shapleys_df$CIsup)==1
 X_names=paste0('x.',1:10)
 
