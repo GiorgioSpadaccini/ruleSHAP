@@ -1,9 +1,9 @@
-# Hypothesis-free discovery from epidemiological data by automatic detection and local inference for tree-based nonlinearities and interactions - Supplementary code
-_Giorgio Spadaccini (Vrije Universiteit Amsterdam, Leiden University),_
+# Discovery and inference beyond linearity by integrating Bayesian regression, tree ensembles and Shapley values - Supplementary code
+_Giorgio Spadaccini (Amsterdam UMC, Leiden University),_
 
 _Marjolein Fokkema (Leiden University),_
 
-_Mark van de Wiel (Vrije Universiteit Amsterdam)_
+_Mark van de Wiel (Amsterdam UMC)_
 
 ## Content
 
