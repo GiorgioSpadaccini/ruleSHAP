@@ -112,7 +112,7 @@ rownames(SigCounts[[1]])=rownames(SigCounts[[2]])=
 
 names(SigCounts)=names(NoiseCounts)=paste0('p=',c(10,30,50))
 
-p_vec=rep(p_vec,each=nrep)
+p_vec=rep(1:3,each=nrep)
 
 for(i in 1:length(p_vec)){
   
