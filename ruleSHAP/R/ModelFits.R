@@ -67,18 +67,22 @@
 #' the linear terms. The remaining entries are for the rules, in the same order as in
 #' output \code{rules}
 #' @export
-ruleSHAP=function(formula,data,intercept=T,family=c('gaussian','binomial'),
+ruleSHAP=function(formula,data,intercept=TRUE,family=c('gaussian','binomial','survival'),
                   mu=0.5,eta=2,lin.relax=1,method.tau.lin="halfCauchy",
-                  ntree=500,maxdepth=3,disaggregate=T,rounding.digits=2,
+                  ntree=500,maxdepth=3,disaggregate=TRUE,rounding.digits=2,
                   burn.in=2e3,nmc=2e4,thin=1,ping=1e3,
-                  verbose=T,rules=NULL,wins.frac=0.025){
+                  verbose=TRUE,rules=NULL,wins.frac=0.025){
 
 
-  #Retrieve basic quantities
+  #Retrieve basic quantities (Survival is a bit special)
   family=match.arg(family)
-  y_name=as.character(formula[[2]])
   X_names=labels(terms(formula, data=data))
-
+  if(family == 'survival'){
+    surv_name=as.character(formula[[2]])
+    y_name=surv_name[2:3]
+  } else{
+    y_name=as.character(formula[[2]])
+  }
 
   #Winsorize data and store winsorization points
   wins.points=matrix(nrow=2,ncol=ncol(data))
@@ -94,10 +98,18 @@ ruleSHAP=function(formula,data,intercept=T,family=c('gaussian','binomial'),
   y=data[, y_name]
   X=data[, X_names]
   data=data[,c(y_name,X_names)]
+  if(family=='survival'){
+    censored = which(y[,2] == 0)
+  }
 
 
   #Retrieve linear terms (in case some variables are factors) and re-scale them
-  X_lin=model.matrix(formula,data=data)
+  if(family=='survival'){
+    nosurv_formula=as.formula(paste("~", deparse(formula[[3]])))
+    X_lin=model.matrix(nosurv_formula,data=data[,!(colnames(data) %in% y_name)])
+  } else{
+    X_lin=model.matrix(formula,data=data)
+  }
   #Remove the intercept if requested
   if(!intercept){X_lin=X_lin[,-1]}
   #Standardize X_lin (but store info before doing so)
@@ -136,23 +148,35 @@ ruleSHAP=function(formula,data,intercept=T,family=c('gaussian','binomial'),
   n=nrow(data)
 
 
-  #If gaussian, standardize Y
+  #If gaussian, standardize Y. If survival, standardize log(Y)
   if(family=='gaussian'){
     MuY=mean(y)
     SDy=sd(y)
     if(intercept){
       y=(y-MuY)/SDy
     }
+  } else if(family =='survival'){
+    logY=log(y[,1])
+    MuY=mean(logY)
+    SDy=sd(logY)
+    if(intercept){
+      logY=(logY-MuY)/SDy
+      y[,1]=exp(logY)
+    }
   }
 
-
-  #Use the linear terms to compute residuals
+  #Fit model with just linear terms (used to generate rules and give starting point)
   HS_fit=hs(y=y, X=X_lin,family=family,
-              method.tau.lin=method.tau.lin, tau.lin=1,
-              method.tau.rules = 'fixed', tau.rules = 1,
-              method.tau = 'fixed', tau = 1,
-              burn=burn.in, nmc=nmc,
-              method.sigma="Jeffreys")
+            method.tau.lin=method.tau.lin, tau.lin=1,
+            method.tau.rules = 'fixed', tau.rules = 1,
+            method.tau = 'fixed', tau = 1,
+            burn=burn.in, nmc=nmc,
+            method.sigma="Jeffreys")
+
+  #Fit parametric random forest on residuals if rules not pre-specified
+  if(is.null(rules)){
+    #Use the linear terms to compute residuals
+    if(verbose){print('Generating rules')}
 
     #Round numeric predictors and create the dataset for rule generation
     which_numeric=sapply(X,is.numeric)
@@ -164,12 +188,27 @@ ruleSHAP=function(formula,data,intercept=T,family=c('gaussian','binomial'),
       #For now I'll define the working residuals
       phat=1/(1+exp(-c(X_lin%*%HS_fit$BetaHat)))
       rulegen_data$res=(y-phat)/(phat*(1-phat))
+    } else if(family == 'survival'){
+      rulegen_data$res=logY-c(X_lin%*%HS_fit$BetaHat)
+      #For censored observations, use E[r|r>residual], under normal distribution
+      lowlim=rulegen_data$res[censored]/sqrt(HS_fit$Sigma2Hat)
+      #rulegen_data$res[censored]=sqrt(HS_fit$Sigma2Hat)*dnorm(lowlim)/(1-pnorm(lowlim))
+      rulegen_data$res[censored]=sqrt(HS_fit$Sigma2Hat)*
+        exp(dnorm(lowlim,log = TRUE)-pnorm(lowlim,log.p = TRUE, lower.tail = FALSE))
+      
+      #actually, try to overwrite with working residuals, deal with censoring same way
+      yhat=exp(c(X_lin%*%HS_fit$BetaHat))
+      lowlim=(logY[censored]-log(yhat[censored]))/sqrt(HS_fit$Sigma2Hat)
+      rulegen_data$res=(y[,1]-yhat)/yhat#=y/yhat-1=exp(log(Y)-Xbeta)-1
+      rulegen_data$res[censored]=exp(HS_fit$Sigma2Hat/2
+                                     +pnorm(lowlim-sqrt(HS_fit$Sigma2Hat),log.p = TRUE,
+                                            lower.tail = FALSE)
+                                     -pnorm(lowlim,log.p = TRUE, lower.tail = FALSE)
+                                     )-1
     }
 
-  #Fit parametric random forest on residuals if rules not pre-specified
-  if(is.null(rules)){
-  if(verbose){print('Generating rules')}
-   rules=PRF(x=rulegen_data[,X_names],y=rulegen_data$res,
+
+    rules=PRF(x=rulegen_data[,X_names],y=rulegen_data$res,
               ntree=ntree,rounding.digits=rounding.digits,
               maxdepth=maxdepth,disaggregate=disaggregate)
 
@@ -226,10 +265,12 @@ ruleSHAP=function(formula,data,intercept=T,family=c('gaussian','binomial'),
             Beta_init=Beta_init,Sigma2=Sigma2_init,Lambda_init=Lambda_init,
             tau.lin=TauLin_init,tau.rules=TauRules_init,verbose=verbose)
 
-  #For gaussian case, Y was standardized.
+  #For gaussian and survival case, Y or logY was standardized.
   #Keep that into account, also for intercept
-  if(family=='gaussian'){
+  if(family=='gaussian' || family=='survival'){
     HS_fit$BetaSamples=HS_fit$BetaSamples*SDy
+    HS_fit$Sigma2Samples=HS_fit$Sigma2Samples*(SDy^2)
+    HS_fit$Sigma2Hat=HS_fit$Sigma2Hat*(SDy^2)
     if(intercept){
       HS_fit$BetaSamples[1,]=HS_fit$BetaSamples[1,]+MuY
     }
@@ -246,8 +287,14 @@ ruleSHAP=function(formula,data,intercept=T,family=c('gaussian','binomial'),
     output$BetaSamples[2:p,]=output$BetaSamples[2:p,]/sdX_lin[-1]
     output$BetaSamples[1,]=
       output$BetaSamples[1,]-muX[-1]%*%output$BetaSamples[-1,]
+      
+    output$LambdaSamples[2:p,]=output$LambdaSamples[2:p,]/sdX_lin[-1]
+    output$LambdaHat[2:p,]=output$LambdaHat[2:p,]/sdX_lin[-1]
   } else{
     output$BetaSamples[1:p,]=output$BetaSamples[1:p,]/sdX_lin
+    
+    output$LambdaSamples[2:p,]=output$LambdaSamples[1:p,]/sdX_lin
+    output$LambdaHat[2:p,]=output$LambdaHat[1:p,]/sdX_lin
   }
 
 
@@ -336,7 +383,7 @@ ruleSHAP=function(formula,data,intercept=T,family=c('gaussian','binomial'),
 #' @return LambdaSamples A matrix where every column is a MCMC sample of the local shrinkages, one entry per term.
 #' @return LambdaHat A vector containing the posterior mean of the local shrinkages.
 #' @export
-hs=function(y, X, family=c('gaussian',"binomial"), p.lin=ncol(X),
+hs=function(y, X, family=c('gaussian',"binomial",'survival'), p.lin=ncol(X),
             method.tau.rules = c("halfCauchy", "truncatedCauchy", "fixed"),
             tau.rules = 1, method.tau.lin = c("halfCauchy", "truncatedCauchy", "fixed"),
             tau.lin = 1, method.tau = c("halfCauchy", "truncatedCauchy", "fixed"),
@@ -363,23 +410,32 @@ hs=function(y, X, family=c('gaussian',"binomial"), p.lin=ncol(X),
   betaout <- matrix(0, p, effsamp)
   lambdaout <- matrix(0, p, effsamp)
   taulinout <- tauruleout <- tauout <- sigma2out <- rep(0, effsamp)
+  omegaout <- matrix(0,n,effsamp)
 
   algoBhatt = p>=n
-
+  
   #If prior for local shrinkage is not specified, it's just uniform
   if(is.null(prior_lambda)){
     prior_lambda = rep(1, times=p)
   }
 
   #If logistic, re-adjust y and sigma as per Polya Inverse Gamma augmentation
+  #If survival, y contains two columns: response and censoring indicator
+  censored = NULL
+  n.censored=0
   if(family=='binomial'){
     y <- y - 0.5
     method.sigma='fixed'
     Sigma2=1
+  } else if(family == 'survival'){
+    delta = y[,2]
+    censored = which(delta == 0)
+    n.censored = length(censored)
+    y <- logtimes <- log(y[,1])  #outcome is log time
   }
 
   #If family is gaussian and algorithm is Rue, Q_star must only be computed once
-  if(family=='gaussian' & algoBhatt == F){
+  if(!algoBhatt){
     Q_star=crossprod(X)
   }
 
@@ -398,8 +454,8 @@ hs=function(y, X, family=c('gaussian',"binomial"), p.lin=ncol(X),
 
     #Update tau.lin
     if (method.tau.lin == "halfCauchy") {
-      xi.inv = rexp(1, 1 + 1/tau.lin^2)
-      tau.lin = sqrt(1/rgamma(1, shape = (p.lin + 1)/2,
+      xi.inv = stats::rexp(1, 1 + 1/tau.lin^2)
+      tau.lin = sqrt(1/stats::rgamma(1, shape = (p.lin + 1)/2,
                               rate = xi.inv + sum(Beta[1:p.lin]^2/(2 * (lambda[1:p.lin]*prior_lambda[1:p.lin]*tau)^2 * Sigma2))))
     }
     if (method.tau.lin == "truncatedCauchy") {
@@ -457,7 +513,7 @@ hs=function(y, X, family=c('gaussian',"binomial"), p.lin=ncol(X),
       Fubt_2 = stats::pgamma(ubt_2, (p + 1)/2, scale = 1/tempt)
       ut = stats::runif(1, Fubt_1, Fubt_2)
       et = stats::qgamma(ut, (p + 1)/2, scale = 1/tempt)
-      tau.rules = 1/sqrt(et)
+      tau = 1/sqrt(et)
     }
 
 
@@ -480,15 +536,22 @@ hs=function(y, X, family=c('gaussian',"binomial"), p.lin=ncol(X),
 
 
 
-
+    
+    
+    
     #Sample omega if bernoulli family (otherwise it stays 1 so no damage done)
     #In doing so, update z
+    #Update of z also different for survival
     if(family=='binomial'){
       omega=pgdraw::pgdraw(1, X%*%Beta)
       sqrt.omega <- sqrt(omega)
       Xt=t(sqrt.omega * X)
       z=y/omega
-    } else{
+    } else if(family == 'survival'){
+      y[censored] <- msm::rtnorm(n.censored, mean = X[censored,] %*% Beta, 
+                                 sd = sqrt(Sigma2), lower = logtimes[censored])
+      z=y/sqrt(Sigma2)
+    }else{
       z=y/sqrt(Sigma2)
     }
 
@@ -505,9 +568,6 @@ hs=function(y, X, family=c('gaussian',"binomial"), p.lin=ncol(X),
       Beta = sqrt(Sigma2) * c(u + U %*% v_star)
     }
     else{
-      if(family=='binomial'){
-        Q_star=tcrossprod(Xt)
-      }
       L = chol((Q_star + diag(1/lambda_star^2,p,p))/Sigma2)
       v = solve(t(L), Xt %*% (z*sqrt.omega/sqrt(Sigma2)))
       mu = solve(L, v)
@@ -530,21 +590,24 @@ hs=function(y, X, family=c('gaussian',"binomial"), p.lin=ncol(X),
       tauruleout[(i - burn.in)/thin] <- tau.rules
       tauout[(i - burn.in)/thin] <- tau
       sigma2out[(i - burn.in)/thin] <- Sigma2
+      omegaout[,(i - burn.in)/thin] <- omega
     }
   }
 
   result = list(LambdaSamples = lambdaout,
-                TauSamples = taulinout,
+                TauSamples = tauout,
                 TauLinSamples = taulinout,
                 TauRulesSamples = tauruleout,
                 Sigma2Samples = sigma2out,
                 BetaSamples = betaout,
+                OmegaSamples = omegaout,
                 BetaHat= rowMeans(betaout),
                 TauHat= mean(tauout),
                 TauLinHat= mean(taulinout),
                 TauRulesHat= mean(tauruleout),
                 LambdaHat = rowMeans(lambdaout),
-                Sigma2Hat = mean(sigma2out))
+                Sigma2Hat = mean(sigma2out),
+                OmegaHat = rowMeans(omegaout),
+                OmegaMedian = c(apply(omegaout,1,median)))
   return(result)
 }
-
