@@ -289,12 +289,12 @@ ruleSHAP=function(formula,data,intercept=TRUE,family=c('gaussian','binomial','su
       output$BetaSamples[1,]-muX[-1]%*%output$BetaSamples[-1,]
       
     output$LambdaSamples[2:p,]=output$LambdaSamples[2:p,]/sdX_lin[-1]
-    output$LambdaHat[2:p,]=output$LambdaHat[2:p,]/sdX_lin[-1]
+    output$LambdaHat[2:p]=output$LambdaHat[2:p]/sdX_lin[-1]
   } else{
-    output$BetaSamples[1:p,]=output$BetaSamples[1:p,]/sdX_lin
+    output$BetaSamples=output$BetaSamples/sdX_lin
     
-    output$LambdaSamples[2:p,]=output$LambdaSamples[1:p,]/sdX_lin
-    output$LambdaHat[2:p,]=output$LambdaHat[1:p,]/sdX_lin
+    output$LambdaSamples=output$LambdaSamples/sdX_lin
+    output$LambdaHat=output$LambdaHat/sdX_lin
   }
 
 
