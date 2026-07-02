@@ -1,4 +1,3 @@
-lin_relax=100
 burn.in=2e3
 nmc=2e4
 maxdepth=3
@@ -38,21 +37,21 @@ friedman_test=gendata.friedman1(n=1e4,p=p,sd=10,rho=0.3+diag(0.7,nrow=p,ncol=p))
 #Preallocate data frame with predicted outcomes
 preds <- data.frame(pre = rep(NA, times = nrow(friedman_test)),
                     true = friedman_test[ , all.vars(formula)[1L]])
-preds$lasso=preds$ols=preds$rf=preds$hr1=preds$hr2=preds$ruleshap=preds$pre
+preds$lasso=preds$ols=preds$rf=preds$hr=preds$ruleshap=preds$pre
 
 
 #Preallocate matrix to store results in
 MSEMat=matrix(ncol= nrep*length(n_vec), nrow=ncol(preds)-1)
-LinRegMat=LassoMat=RuleFitMat=HorseRule1Mat=HorseRule2Mat=RuleSHAPMat=
+LinRegMat=LassoMat=RuleFitMat=HorseRuleMat=RuleSHAPMat=
   matrix(ncol= nrep*length(n_vec), nrow=ncol(model.matrix(formula,data=friedman_trains))-1)
 rownames(MSEMat)=names(preds)[-2]
-shapleys_dfs=hr1_shapleys=hr2_shapleys=rf_shapleys=list()
+shapleys_dfs=hr_shapleys=rf_shapleys=list()
 
 
 #Fit models
 set.seed(42)
-for(i in 1:nrep){
-  for(n_index in 1:length(n_vec)){
+for(i in 5){
+  for(n_index in length(n_vec)){
     #Set repetition-specific quantities
     set.seed(length(n_vec)*(i-1)+n_index)
     n=n_vec[n_index]
@@ -74,17 +73,11 @@ for(i in 1:nrep){
     hr_data[,as.character(formula[[2]])]=data[,as.character(formula[[2]])]
     hr_test=as.data.frame(model.matrix(formula,friedman_test))[,-1]
     
-    hr1 <- horserule:::HorseRuleFit(model.formula = formula, data=hr_data,
-                                   restricted=0,linterms = 1:(ncol(hr_data)-1),
-                                   niter = nmc+burn.in, burnin = burn.in, thin = 1,
-                                   ntree = ntree,intercept=T, Xtest=hr_test,
-                                   linp=1, ensemble='both',mix=0.3)
-                                   
-    hr2 <- horserule:::HorseRuleFit(model.formula = formula, data=hr_data,
-                                   restricted=0,linterms = 1:(ncol(hr_data)-1),
-                                   niter = nmc+burn.in, burnin = burn.in, thin = 1,
-                                   ntree = ntree,intercept=T, Xtest=hr_test,
-                                   linp=lin_relax, ensemble='RF')
+    hr <- horserule:::HorseRuleFit(model.formula = formula, data=hr_data,
+                                    restricted=0,linterms = 1:(ncol(hr_data)-1),
+                                    niter = nmc+burn.in, burnin = burn.in, thin = 1,
+                                    ntree = ntree,intercept=T, Xtest=hr_test,
+                                    linp=1, ensemble='both',mix=0.3)
     
     
     ###########Store predictions
@@ -92,8 +85,7 @@ for(i in 1:nrep){
     preds$pre <- predict(preb, newdata = friedman_test)
     preds$lasso <- predict(prel, newx = as.matrix(friedman_test[,1:p]))
     preds$rf <- predict(rf, newdata = friedman_test)
-    preds$hr1 <- hr1$pred
-    preds$hr2 <- hr2$pred
+    preds$hr <- hr$pred
     
     
     
@@ -106,17 +98,13 @@ for(i in 1:nrep){
     
     #From the code of predict.HorseRulemodel we can see that stored coefficients
     #are not rescaled to refer to the standardization process, so that needs to be included
-    HorseRule1Mat[,(n_index-1)*nrep+i]=hr1$postmean[1+(1:nrow(HorseRule1Mat))]/
-      hr1$modelstuff$sdl
-
-    HorseRule2Mat[,(n_index-1)*nrep+i]=hr2$postmean[1+(1:nrow(HorseRule2Mat))]/
-      hr2$modelstuff$sdl
+    HorseRuleMat[,(n_index-1)*nrep+i]=hr$postmean[1+(1:nrow(HorseRuleMat))]/
+      hr$modelstuff$sdl
     
     
     
     #Now do the same for RuleSHAP
-    RS_fit=ruleSHAP(formula=formula, data=data, family='gaussian',verbose=T,
-                    nmc=nmc,burn.in = burn.in)
+    RS_fit=ruleSHAP(formula=formula, data=data, family='gaussian',verbose=T,nmc=nmc,burn.in = burn.in)
     
     #Store predictions
     Ytr=data[, as.character(formula[[2]])]
@@ -141,37 +129,32 @@ for(i in 1:nrep){
     shapleys=compute_SHAP(RS_fit,data[,1:p],combine=list(c('x.1','x.2')))
     shapleys_dfs[[(n_index-1)*nrep+i]]=shapleys$marginal
     
-    #Shapleys for HR1
-    hr1_new=list(BetaSamples=t(hr1$postdraws$beta[(1:burn.in),])/c(1,hr1$modelstuff$sdl,hr1$modelstuff$sdr)*hr1$modelstuff$sdy,
-                 rules=gsub("]"," ",gsub("X[,","x.",hr1$rules,fixed=T),fixed=T))
-    shapleys=compute_SHAP(hr1_new,data[,1:p],combine=list(c('x.1','x.2')))
-    hr1_shapleys[[(n_index-1)*nrep+i]]=shapleys$marginal
-    
-    #Shapleys for HR2
-    hr2_new=list(BetaSamples=t(hr2$postdraws$beta[(1:burn.in),])/c(1,hr2$modelstuff$sdl,hr2$modelstuff$sdr)*hr2$modelstuff$sdy,
-                 rules=gsub("]"," ",gsub("X[,","x.",hr2$rules,fixed=T),fixed=T))
-    shapleys=compute_SHAP(hr2_new,data[,1:p],combine=list(c('x.1','x.2')))
-    hr2_shapleys[[(n_index-1)*nrep+i]]=shapleys$marginal
+    #Shapleys for HR
+    hr_new=list(BetaSamples=t(hr$postdraws$beta[(1:burn.in),])/c(1,hr$modelstuff$sdl,hr$modelstuff$sdr)*hr$modelstuff$sdy,
+                 rules=gsub("]"," ",gsub("X[,","x.",hr$rules,fixed=T),fixed=T))
+    shapleys=compute_SHAP(hr_new,data[,1:p],combine=list(c('x.1','x.2')))
+    hr_shapleys[[(n_index-1)*nrep+i]]=shapleys$marginal
     
     #Shapleys for RF
     unified_model <- randomForest.unify(rf, as.matrix(data[,1:p]))
     rf_shapleys[[(n_index-1)*nrep+i]] <- treeshap(unified_model, data[,1:p])
-  }
-}
-
 
 #Save everything
 saveRDS(MSEMat,'output/MSEMat_p10.Rda')
 saveRDS(LinRegMat,'output/LinRegMat_p10.Rda')
 saveRDS(LassoMat,'output/LassoMat_p10.Rda')
 saveRDS(RuleFitMat,'output/RuleFitMat_p10.Rda')
-saveRDS(HorseRule1Mat,'output/HorseRule1Mat_p10.Rda')
-saveRDS(HorseRule2Mat,'output/HorseRule2Mat_p10.Rda')
+saveRDS(HorseRuleMat,'output/HorseRuleMat_p10.Rda')
 saveRDS(RuleSHAPMat,'output/RuleSHAPMat_p10.Rda')
 saveRDS(shapleys_dfs,'output/shapleys_dfs_p10.Rda')
-saveRDS(hr1_shapleys,'output/hr1_shapleys_p10.Rda')
-saveRDS(hr2_shapleys,'output/hr2_shapleys_p10.Rda')
+saveRDS(hr_shapleys,'output/hr_shapleys_p10.Rda')
 saveRDS(rf_shapleys,'output/rf_shapleys_p10.Rda')
+  }
+}
+
+
+
+
 
 
 
@@ -179,20 +162,18 @@ saveRDS(rf_shapleys,'output/rf_shapleys_p10.Rda')
 #Plot result:
 
 #Plot coefficients:
-#Create dataframe
-nmethods=6
+nmethods=5
 p_show=6
-models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF')
-df=data.frame(coef=c(readRDS('output/RuleFitMat_p10.Rda')[1:p_show,],
-                     readRDS('output/RuleSHAPMat_p10.Rda')[1:p_show,],
-                     readRDS('output/HorseRule1Mat_p10.Rda')[1:p_show,],
-                     readRDS('output/HorseRule2Mat_p10.Rda')[1:p_show,],
-                     readRDS('output/LinRegMat_p10.Rda')[1:p_show,],
-                     readRDS('output/LassoMat_p10.Rda')[1:p_show,]),
-                    model=rep(c('RuleFit','RuleSHAP','HR1','HR2','OLS','LASSO'),
-                              each=nrep*length(n_vec)*p_show),
-                    rep=rep(1:nrep,each=nmethods),
-                    n=rep(n_vec,each=nrep*nmethods),predictor=paste0('x.',1:p_show))
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HorseRule','BART','RF')
+df=data.frame(coef=c(readRDS('RuleFitMat_p10.Rda')[1:p_show,],
+                     readRDS('RuleSHAPMat_p10.Rda')[1:p_show,],
+                     readRDS('HorseRule1Mat_p10.Rda')[1:p_show,],
+                     readRDS('LinRegMat_p10.Rda')[1:p_show,],
+                     readRDS('LassoMat_p10.Rda')[1:p_show,]),
+              model=rep(c('RuleFit','RuleSHAP','HorseRule','OLS','LASSO'),
+                        each=nrep*length(n_vec)*p_show),
+              rep=rep(1:nrep,each=nmethods),
+              n=rep(n_vec,each=nrep*nmethods),predictor=paste0('x.',1:p_show))
 
 #Define target (use lm() for first two entries)
 int_coef=mean(coef(lm(formula=y~.,data=gendata.friedman1(n=1e6,p=6,sd=0)))[2:3])
@@ -216,7 +197,7 @@ ggplot(df, aes(x=predictor, y=coef, fill=factor(model,levels=models))) +
   scale_fill_manual(values=c(colorspace::rainbow_hcl(length(models))),
                     breaks=models,name='Model')+
   scale_shape_manual(values=1:(length(models)),
-                     breaks=models, name='Model')#+ylim(c(-10,15))
+                     breaks=models, name='Model')
 
 
 
@@ -224,18 +205,17 @@ ggplot(df, aes(x=predictor, y=coef, fill=factor(model,levels=models))) +
 
 #Plot predictive performance
 #Load dataframes and join them
-nmethods=8
-models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF')
-df=rbind(data.frame(MSE=c(readRDS('output/MSEMat_p10.Rda')),p=10,
-                    model=c('RuleFit','RuleSHAP','HR2','HR1','RF','OLS','LASSO'),
+nmethods=6
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HorseRule','BART','RF')
+df=rbind(data.frame(MSE=c(readRDS('MSEMat_p10.Rda')),p=10,
+                    model=c('RuleFit','RuleSHAP','HorseRule','RF','OLS','LASSO'),
                     rep=rep(1:nrep,each=nmethods),
                     n=rep(n_vec,each=nrep*nmethods)),
-         data.frame(MSE=c(readRDS('output/MSEMat_p30.Rda')),p=30,
-                    model=c('RuleFit','RuleSHAP','HR2','HR1','RF','OLS','LASSO'),
+         data.frame(MSE=c(readRDS('MSEMat_p30.Rda')),p=30,
+                    model=c('RuleFit','RuleSHAP','HorseRule','RF','OLS','LASSO'),
                     rep=rep(1:nrep,each=nmethods),
                     n=rep(n_vec,each=nrep*nmethods)))
-#Plot it
-df=df[complete.cases(df),]
+#Plot results
 ggplot(df, aes(x=factor(model,levels=models), y=MSE,
                fill=factor(model,levels=models))) +
   facet_grid(paste('p =',p) ~ 
@@ -263,9 +243,8 @@ ggplot(df, aes(x=factor(model,levels=models), y=MSE,
 #Load data and compute MSE
 RS_dfs=readRDS('output/shapleys_dfs_p10.Rda')
 rf_dfs=readRDS('output/rf_shapleys_p10.Rda')
-hr1_dfs=readRDS('output/hr1_shapleys_p10.Rda')
-hr2_dfs=readRDS('output/hr2_shapleys_p10.Rda')
-models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF')
+hr_dfs=readRDS('output/hr_shapleys_p10.Rda')
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HorseRule','BART','RF')
 
 #Re-scale distances by theoretical variance of contribution
 x1x2_avg=rmutil::int2(function(x,z){sin(x*z*pi)},a=c(0,0),b=c(1,1))
@@ -291,19 +270,16 @@ for(i in 1:length(RS_dfs)){
              10*rmutil::int2(function(x,z){sin(x*z*pi)},a=c(0,0),b=c(1,1)))
   
   #Load other dataframes
-  hr1_df=hr1_dfs[[i]]
-  hr1_df=hr1_df[!(hr1_df$predictor %in% c('x.1','x.2')),]
-  hr2_df=hr2_dfs[[i]]
-  hr2_df=hr2_df[!(hr2_df$predictor %in% c('x.1','x.2')),]
-  rf_df=hr2_df
+  hr_df=hr_dfs[[i]]
+  hr_df=hr_df[!(hr_df$predictor %in% c('x.1','x.2')),]
+  rf_df=hr_df
   rf_shaps=rf_dfs[[i]]$shaps
   rf_shaps$x.2=rf_shaps$x.1+rf_shaps$x.2
   rf_df$value=c(as.matrix(rf_shaps)[,c(3:p,2)])
   
   
   df=rbind(cbind(model='RuleSHAP',RS_df),
-           cbind(model='HR1',hr1_df),
-           cbind(model='HR2',hr2_df),
+           cbind(model='HorseRule',hr_df),
            cbind(model='RF',rf_df))
   df$target=target
   df$theovar=rep(theo_var,each=n)
