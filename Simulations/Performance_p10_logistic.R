@@ -1,4 +1,3 @@
-lin_relax=100
 burn.in=2e3
 nmc=2e4
 maxdepth=3
@@ -37,12 +36,12 @@ friedman_test=gendata.friedman1(n=1e4,p=p,sd=10,rho=0.3+diag(0.7,nrow=p,ncol=p),
 #Preallocate data frame with predicted outcomes
 preds <- data.frame(pre = rep(NA, times = nrow(friedman_test)),
                     true = friedman_test[ , all.vars(formula)[1L]])
-preds$lasso=preds$ols=preds$rf=preds$hr1=preds$hr2=preds$ruleshap=preds$pre
+preds$lasso=preds$ols=preds$rf=preds$hr=preds$ruleshap=preds$pre
 
 
 #Preallocate matrix to store results in
 AUCMat=matrix(ncol= nrep*length(n_vec), nrow=ncol(preds)-1)
-LinRegMat=LassoMat=RuleFitMat=HorseRule1Mat=HorseRule2Mat=RuleSHAPMat=
+LinRegMat=LassoMat=RuleFitMat=HorseRuleMat=RuleSHAPMat=
   matrix(ncol= nrep*length(n_vec), nrow=ncol(model.matrix(formula,data=friedman_trains))-1)
 rownames(AUCMat)=names(preds)[-2]
 
@@ -71,20 +70,14 @@ for(i in 1:nrep){
     #Fit HorseRule in two ways
     #I'll just assume intercept is included in the formula given in the input
     hr_data=as.data.frame(model.matrix(formula,data))[,-1]
-    hr_data[,as.character(formula[[2]])]=data_rf[,as.character(formula[[2]])]
+    hr_data[,as.character(formula[[2]])]=data[,as.character(formula[[2]])]
     hr_test=as.data.frame(model.matrix(formula,friedman_test))[,-1]
     
-    hr1 <- horserule:::HorseRuleFit(model.formula = formula, data=hr_data,
-                                   restricted=0,linterms = 1:(ncol(hr_data)-1),
-                                   niter = nmc+burn.in, burnin = burn.in, thin = 1,
-                                   ntree = ntree,intercept=T, Xtest=hr_test,
-                                   linp=1, ensemble='both',mix=0.3)
-                                   
-    hr2 <- horserule:::HorseRuleFit(model.formula = formula, data=hr_data,
-                                   restricted=0,linterms = 1:(ncol(hr_data)-1),
-                                   niter = nmc+burn.in, burnin = burn.in, thin = 1,
-                                   ntree = ntree,intercept=T, Xtest=hr_test,
-                                   linp=lin_relax, ensemble='RF')
+    hr <- horserule:::HorseRuleFit(model.formula = formula, data=hr_data,
+                                    restricted=0,linterms = 1:(ncol(hr_data)-1),
+                                    niter = nmc+burn.in, burnin = burn.in, thin = 1,
+                                    ntree = ntree,intercept=T, Xtest=hr_test,
+                                    linp=1, ensemble='both',mix=0.3)
     
     
     ###########Store predictions
@@ -92,8 +85,7 @@ for(i in 1:nrep){
     preds$pre <- predict(preb, newdata = friedman_test,type='response')
     preds$lasso <- predict(prel, newx = as.matrix(friedman_test[,1:p]),type='response')
     preds$rf <- predict(rf, newdata = friedman_test,type='prob')[,2]
-    preds$hr1 <- hr1$pred
-    preds$hr2 <- hr2$pred
+    preds$hr <- hr$pred
     
     
     
@@ -106,11 +98,8 @@ for(i in 1:nrep){
     
     #From the code of predict.HorseRulemodel we can see that stored coefficients
     #are not rescaled to refer to the standardization process, so that needs to be included
-    HorseRule1Mat[,(n_index-1)*nrep+i]=hr1$postmean[1+(1:nrow(HorseRule1Mat))]/
-      hr1$modelstuff$sdl
-
-    HorseRule2Mat[,(n_index-1)*nrep+i]=hr2$postmean[1+(1:nrow(HorseRule2Mat))]/
-      hr2$modelstuff$sdl
+    HorseRuleMat[,(n_index-1)*nrep+i]=hr$postmean[1+(1:nrow(HorseRuleMat))]/
+      hr$modelstuff$sdl
     
     
     
@@ -143,8 +132,7 @@ saveRDS(AUCMat,'output/AUCMat_p10_logit.Rda')
 saveRDS(LinRegMat,'output/LinRegMat_p10_logit.Rda')
 saveRDS(LassoMat,'output/LassoMat_p10_logit.Rda')
 saveRDS(RuleFitMat,'output/RuleFitMat_p10_logit.Rda')
-saveRDS(HorseRule1Mat,'output/HorseRule1Mat_p10_logit.Rda')
-saveRDS(HorseRule2Mat,'output/HorseRule2Mat_p10_logit.Rda')
+saveRDS(HorseRuleMat,'output/HorseRuleMat_p10_logit.Rda')
 saveRDS(RuleSHAPMat,'output/RuleSHAPMat_p10_logit.Rda')
 
 
@@ -159,16 +147,15 @@ saveRDS(RuleSHAPMat,'output/RuleSHAPMat_p10_logit.Rda')
 
 #Plot coefficients:
 #Create dataframe
-nmethods=6
+nmethods=5
 p_show=6
-models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF')
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HorseRule','BART','RF')
 df=data.frame(coef=c(readRDS('output/RuleFitMat_p10_logit.Rda')[1:p_show,],
                      readRDS('output/RuleSHAPMat_p10_logit.Rda')[1:p_show,],
-                     readRDS('output/HorseRule1Mat_p10_logit.Rda')[1:p_show,],
-                     readRDS('output/HorseRule2Mat_p10_logit.Rda')[1:p_show,],
+                     readRDS('output/HorseRuleMat_p10_logit.Rda')[1:p_show,],
                      readRDS('output/LinRegMat_p10_logit.Rda')[1:p_show,],
                      readRDS('output/LassoMat_p10_logit.Rda')[1:p_show,]),
-              model=rep(c('RuleFit','RuleSHAP','HR1','HR2','OLS','LASSO'),
+              model=rep(c('RuleFit','RuleSHAP','HorseRule','OLS','LASSO'),
                         each=nrep*length(n_vec)*p_show),
               rep=rep(1:nrep,each=nmethods),
               n=rep(n_vec,each=nrep*nmethods),predictor=paste0('x.',1:p_show))
@@ -203,18 +190,17 @@ ggplot(df, aes(x=predictor, y=coef, fill=factor(model,levels=models))) +
 
 #Plot predictive performance
 #Load dataframes and join them
-nmethods=8
-models=c('OLS','LASSO','RuleSHAP','RuleFit','HR1','HR2','BART','RF')
-df=rbind(data.frame(AUC=c(readRDS('output/AUCMat_p10_logit.Rda')),p=10,
-                    model=c('RuleFit','RuleSHAP','HR2','HR1','RF','OLS','LASSO'),
+nmethods=6
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HorseRule','BART','RF')
+df=rbind(data.frame(AUC=c(readRDS('AUCMat_p10_logit.Rda')),p=10,
+                    model=c('RuleFit','RuleSHAP','HorseRule','RF','OLS','LASSO'),
                     rep=rep(1:nrep,each=nmethods),
                     n=rep(n_vec,each=nrep*nmethods)),
-         data.frame(AUC=c(readRDS('output/AUCMat_p30_logit.Rda')),p=30,
-                    model=c('RuleFit','RuleSHAP','HR2','HR1','RF','OLS','LASSO'),
+         data.frame(AUC=c(readRDS('AUCMat_p30_logit.Rda')),p=30,
+                    model=c('RuleFit','RuleSHAP','HorseRule','RF','OLS','LASSO'),
                     rep=rep(1:nrep,each=nmethods),
                     n=rep(n_vec,each=nrep*nmethods)))
-#Plot it
-df=df[complete.cases(df),]
+#Plot results
 ggplot(df, aes(x=factor(model,levels=models), y=AUC,
                fill=factor(model,levels=models))) +
   facet_grid(paste('p =',p) ~ 
