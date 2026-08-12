@@ -169,7 +169,7 @@ lines_df$npoints=c(t(NoiseCounts[[1]])/2500,
                    t(LargeSigCounts[[2]])/((1-lowsignal_quantile)*5000),
                    t(LargeSigCounts[[3]])/((1-lowsignal_quantile)*15000))
 
-models=c('OLS','LASSO','RuleSHAP','RuleFit','HorseRule','BART','RF','cTree')
+models=c('OLS','LASSO','RuleSHAP','RuleFit','HorseRule','BART','RF')
 
 
 ggplot(lines_df, aes(x = npoints,
