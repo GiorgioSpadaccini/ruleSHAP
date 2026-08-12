@@ -67,7 +67,7 @@ for(i in 5){
     rf <- randomForest(formula, data = data)
     
     
-    #Fit HorseRule in two ways
+    #Fit HorseRule
     #I'll just assume intercept is included in the formula given in the input
     hr_data=as.data.frame(model.matrix(formula,data))[,-1]
     hr_data[,as.character(formula[[2]])]=data[,as.character(formula[[2]])]
