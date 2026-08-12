@@ -223,10 +223,6 @@ ggplot(lines_df, aes(x = npoints,
                                              fill = factor(model,levels=models),
                                              color = factor(model,levels=models),
                                              y=factor(model,levels=models[c(6,5,3)]))) +
-  #geom_segment(aes(x = avg_npoints, xend = avg_npoints,
-  #                 y = factor(model,levels=models[c(6,5,3)]),
-  #                 yend = factor(model,levels=models[c(6,5,3)])+0.05,
-  #                 color = factor(model,levels=models[c(6,5,3)])))+
   geom_point(aes(x = avg_npoints,
                  y = factor(model,levels=models[c(6,5,3)]),
                  color = factor(model,levels=models[c(6,5,3)]),
