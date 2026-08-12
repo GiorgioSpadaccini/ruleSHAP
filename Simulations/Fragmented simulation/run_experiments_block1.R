@@ -79,8 +79,8 @@ for(j in 1:block_size){
     shapleys_dfs[[(p_index-1)*nrep+i]]=ruleshap_df=compute_SHAP(RS_fit,data[,1:p])$marginal
     
     #Save everything
-    saveRDS(shapleys_dfs,paste0('output/shapleys_dfs_',i_block,'.Rda'))
-    saveRDS(shapleys_bart_dfs,paste0('output/shapleys_bart_dfs_',i_block,'.Rda'))
-    saveRDS(hr_shapleys,paste0('output/hr_shapleys_',i_block,'.Rda'))
+    saveRDS(shapleys_dfs,paste0('output/ruleshap_dfs_',i_block,'.Rda'))
+    saveRDS(shapleys_bart_dfs,paste0('output/bart_dfs_',i_block,'.Rda'))
+    saveRDS(hr_shapleys,paste0('output/hr_dfs_',i_block,'.Rda'))
   }
 }
