@@ -78,24 +78,6 @@ for(j in 1:block_size){
     RS_fit=ruleSHAP(formula=formula, data=data,family='gaussian',verbose=T,burn.in = burn.in,nmc = nmc)
     shapleys_dfs[[(p_index-1)*nrep+i]]=ruleshap_df=compute_SHAP(RS_fit,data[,1:p])$marginal
     
-    
-    
-    #### Print counts as a preview
-    bart_df$sig=sign(bart_df$CIinf*bart_df$CIsup)==1
-    ruleshap_df$sig=sign(ruleshap_df$CIinf*ruleshap_df$CIsup)==1
-    hr_df$sig=sign(hr_df$CIinf*hr_df$CIsup)==1
-    
-    bart_counts=bart_df %>% group_by(predictor) %>% summarize(npoints=sum(sig))
-    ruleshap_counts=ruleshap_df %>% group_by(predictor) %>% summarize(npoints=sum(sig))
-    hr_counts=hr_df %>% group_by(predictor) %>% summarize(npoints=sum(sig))
-    
-    print('BART')
-    print(head(bart_counts[order(bart_counts$npoints,decreasing = T),],15))
-    print('HR')
-    print(head(hr_counts[order(hr_counts$npoints,decreasing = T),],15))
-    print('ruleSHAP')
-    print(head(ruleshap_counts[order(ruleshap_counts$npoints,decreasing = T),],15))
-    
     #Save everything
     saveRDS(shapleys_dfs,paste0('output/shapleys_dfs_',i_block,'.Rda'))
     saveRDS(shapleys_bart_dfs,paste0('output/shapleys_bart_dfs_',i_block,'.Rda'))
