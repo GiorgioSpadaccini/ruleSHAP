@@ -107,14 +107,8 @@ bartSHAP=function(model,data,n_test=nrow(data),ping=1e3){
   CIs=apply(SHAPmat,MARGIN=1,FUN=function(x){quantile(x,probs=c(0.025,0.975))})
 
 
-  #For some reason, BART rescales estimated outcomes for extract()
-  #Retrieve by what they have been re-scaled and update Shapley values
-  #accordingly, to put them back on the original scale
-
-  #Use a linear model to retrieve the re-scaling. e.g. 5 observations are enough
-  yhat=colMeans(predict(bartFit,data[1:5,]))
-  y_shap=rowSums(matrix(vals,nrow=1e3))[1:5]
-  rescale_fac=coef(lm(yhat ~ ., data=data.frame(yhat=yhat,y_shap=y_shap)))[2]
+  #BART rescales outcomes by their range. Scale shapleys back to original scale
+  rescale_fac=max(model$y) - min(model$y)
   vals=vals*rescale_fac
   CIs=CIs*rescale_fac
 
